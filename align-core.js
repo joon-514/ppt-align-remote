@@ -105,7 +105,7 @@
         var p = g0;
         for (i = 0; i < n; i++) { pos[i] = p; p += sorted[i][P.size] + g0; }
       } else {
-        if (n < 3) return { error: "간격을 똑같이 나누려면 3개 이상 선택하세요. (2개면 간격 값을 입력)" };
+        if (n < 3) return { error: "간격을 똑같이 나누려면 3개 이상 선택하세요. 2개면 간격 칸에 값을 입력하세요." };
         var box = bbox(sorted);
         var start = axis === "h" ? box.left : box.top;
         var span = axis === "h" ? box.width : box.height;
@@ -133,11 +133,35 @@
     return next;
   }
 
+  // 현재 간격 측정: 위치 순으로 정렬한 뒤 이웃 간 간격. 모두 같으면 값, 다르면 mixed
+  function measureGap(shapes, axis) {
+    if (shapes.length < 2) return null;
+    var P = axis === "h" ? { pos: "left", size: "width" } : { pos: "top", size: "height" };
+    var sorted = shapes.slice().sort(function (a, b) {
+      return (a[P.pos] + a[P.size] / 2) - (b[P.pos] + b[P.size] / 2);
+    });
+    var gaps = [];
+    for (var i = 1; i < sorted.length; i++) {
+      gaps.push(sorted[i][P.pos] - (sorted[i - 1][P.pos] + sorted[i - 1][P.size]));
+    }
+    var first = gaps[0];
+    var same = gaps.every(function (g) { return Math.abs(g - first) < 0.05; });
+    return same ? { value: first, mixed: false } : { value: null, mixed: true };
+  }
+
+  // 여러 오브젝트의 같은 속성이 모두 같으면 그 값, 아니면 null
+  function common(values) {
+    if (!values.length) return null;
+    var f = values[0];
+    if (f === null || f === undefined) return null;
+    return values.every(function (v) { return v !== null && v !== undefined && Math.abs(v - f) < 0.005; }) ? f : null;
+  }
+
   var UNITS = { pt: 1, cm: 72 / 2.54, mm: 72 / 25.4, px: 0.75 };
   function toPt(value, unit) { return value * (UNITS[unit] || 1); }
   function fromPt(value, unit) { return value / (UNITS[unit] || 1); }
 
-  var api = { align: align, distribute: distribute, bbox: bbox, updateOrder: updateOrder, toPt: toPt, fromPt: fromPt };
+  var api = { align: align, distribute: distribute, bbox: bbox, updateOrder: updateOrder, measureGap: measureGap, common: common, toPt: toPt, fromPt: fromPt };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AlignCore = api;
 })(this);
