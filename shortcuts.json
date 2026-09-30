@@ -1,0 +1,78 @@
+{
+  "actions": [
+    {
+      "id": "key_left",
+      "type": "ExecuteFunction",
+      "name": "정렬 리모컨: 왼쪽 맞춤"
+    },
+    {
+      "id": "key_hcenter",
+      "type": "ExecuteFunction",
+      "name": "정렬 리모컨: 가로 가운데 맞춤"
+    },
+    {
+      "id": "key_right",
+      "type": "ExecuteFunction",
+      "name": "정렬 리모컨: 오른쪽 맞춤"
+    },
+    {
+      "id": "key_vcenter",
+      "type": "ExecuteFunction",
+      "name": "정렬 리모컨: 세로 가운데 맞춤"
+    },
+    {
+      "id": "key_top",
+      "type": "ExecuteFunction",
+      "name": "정렬 리모컨: 위쪽 맞춤"
+    },
+    {
+      "id": "key_bottom",
+      "type": "ExecuteFunction",
+      "name": "정렬 리모컨: 아래쪽 맞춤"
+    }
+  ],
+  "shortcuts": [
+    {
+      "action": "key_left",
+      "key": {
+        "default": "Ctrl+Alt+1",
+        "mac": "Command+Option+1"
+      }
+    },
+    {
+      "action": "key_hcenter",
+      "key": {
+        "default": "Ctrl+Alt+2",
+        "mac": "Command+Option+2"
+      }
+    },
+    {
+      "action": "key_right",
+      "key": {
+        "default": "Ctrl+Alt+3",
+        "mac": "Command+Option+3"
+      }
+    },
+    {
+      "action": "key_vcenter",
+      "key": {
+        "default": "Ctrl+Alt+4",
+        "mac": "Command+Option+4"
+      }
+    },
+    {
+      "action": "key_top",
+      "key": {
+        "default": "Ctrl+Alt+5",
+        "mac": "Command+Option+5"
+      }
+    },
+    {
+      "action": "key_bottom",
+      "key": {
+        "default": "Ctrl+Alt+6",
+        "mac": "Command+Option+6"
+      }
+    }
+  ]
+}

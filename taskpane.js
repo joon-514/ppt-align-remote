@@ -8,7 +8,9 @@
     mode: load("mode", "selection"),   // selection | key | slide
     unit: load("unit", "cm"),
     lock: load("lock", "0") === "1",
-    roundOn: load("roundOn", "0") === "1",
+    keysOn: load("keysOn", "1") === "1",
+    keys: {},         // 단축키 동작 id → 조합 문자열 (예: "Command+Option+1")
+    keysApi: false,   // 단축키 변경 API 지원 여부
     slidePreset: load("slidePreset", "auto"),
     customW: load("customW", ""),
     customH: load("customH", ""),
@@ -120,7 +122,7 @@
     busy = true;
     try {
       await PowerPoint.run(async function (ctx) {
-        var sel = await readSel(ctx, state.roundOn);
+        var sel = await readSel(ctx, true);
         applySelection(sel.shapes);
       });
     } catch (e) {
@@ -154,7 +156,7 @@
     busy = true;
     try {
       await PowerPoint.run(async function (ctx) {
-        var sel = await readSel(ctx, needAdj || state.roundOn);
+        var sel = await readSel(ctx, true);
         state.shapes = sel.shapes;
         state.order = Core.updateOrder(state.order, sel.shapes.map(function (s) { return s.id; }));
         if (!sel.shapes.length) { setStatus("먼저 오브젝트를 선택하세요.", "err"); return; }
@@ -253,6 +255,19 @@
       return { changes: ch, msg: "크기 변경" };
     });
   }
+  // X/Y: 선택 전체(바운딩 박스)의 왼쪽 위 기준으로 이동
+  function opPos(axis, pt) {
+    return mutate("위치 이동", function (shapes) {
+      var box = Core.bbox(shapes);
+      var d = pt - (axis === "x" ? box.left : box.top);
+      var ch = {};
+      if (Math.abs(d) > 0.005) shapes.forEach(function (s) {
+        ch[s.id] = axis === "x" ? { left: s.left + d } : { top: s.top + d };
+      });
+      return { changes: ch, msg: "위치 이동" };
+    });
+  }
+
   function opRotate(deg) {
     if (!state.api110) return setStatus("이 PowerPoint 버전은 회전을 지원하지 않아요.", "err");
     return mutate("회전", function (shapes) {
@@ -314,6 +329,9 @@
     setField($("#gapV"), gv && !gv.mixed ? gv.value : null, null, null, "간격", n < 2);
 
     // 모양
+    var box = n ? Core.bbox(shapes) : null;
+    setField($("#posX"), box ? box.left : null, null, "", "", !n);
+    setField($("#posY"), box ? box.top : null, null, "", "", !n);
     setField($("#sizeW"), Core.common(shapes.map(function (s) { return s.width; })), null, "여러 값", "", !n);
     setField($("#sizeH"), Core.common(shapes.map(function (s) { return s.height; })), null, "여러 값", "", !n);
     $("#lock").setAttribute("aria-pressed", String(state.lock));
@@ -321,17 +339,15 @@
     setField($("#rot"), rot, function (v) { return String(parseFloat(v.toFixed(1))); }, "여러 값", "", !n || !state.api110);
     $("#rotPreset").disabled = !n || !state.api110;
 
-    $("#roundOn").checked = state.roundOn;
-    $("#roundBox").hidden = !state.roundOn;
-    if (state.roundOn) {
-      var rs = shapes.filter(function (s) { return s.adj !== undefined; });
-      var radii = rs.map(function (s) { return toFrac(s.adj) * Math.min(s.width, s.height); });
-      setField($("#radius"), Core.common(radii), null, "여러 값", "", !rs.length || !state.api110);
-      $("#roundNote").textContent = !state.api110 ? "이 PowerPoint 버전은 지원하지 않아요."
-        : !n ? "도형을 선택하세요."
-        : rs.length ? "둥근 모서리 도형 " + rs.length + "개에 적용돼요."
-        : "모서리 조절점이 있는 도형(둥근 사각형 등)을 선택하세요.";
-    }
+    var rs = shapes.filter(function (s) { return s.adj !== undefined; });
+    var radii = rs.map(function (s) { return toFrac(s.adj) * Math.min(s.width, s.height); });
+    setField($("#radius"), Core.common(radii), null, "여러 값", "", !rs.length || !state.api110);
+    $("#roundNote").textContent = !state.api110 ? "이 PowerPoint 버전은 지원하지 않아요."
+      : !n ? "도형을 선택하세요."
+      : rs.length ? "둥근 모서리 도형 " + rs.length + "개에 적용돼요."
+      : "라운드를 넣을 수 없는 도형이에요.";
+
+    renderKeys();
 
     // 선택 순서
     var key = effectiveKey();
@@ -377,6 +393,7 @@
     if (kind === "gap") return opDistribute(el.dataset.axis, Core.toPt(v, state.unit));
     if (kind === "size") return opSize(el.dataset.dim, Core.toPt(v, state.unit));
     if (kind === "rot") return opRotate(v);
+    if (kind === "pos") return opPos(el.dataset.axis, Core.toPt(v, state.unit));
     if (kind === "radius") return opRadius(Core.toPt(v, state.unit));
   }
 
@@ -404,9 +421,11 @@
       var v = e.target.value; e.target.value = "";
       if (v !== "") opRotate(+v);
     });
-    $("#roundOn").addEventListener("change", function (e) {
-      state.roundOn = e.target.checked; save("roundOn", state.roundOn ? "1" : "0");
-      render(); refreshSelection();
+    $("#roundDetails").open = load("roundOpen", "0") === "1";
+    $("#roundDetails").addEventListener("toggle", function (e) { save("roundOpen", e.target.open ? "1" : "0"); });
+    $("#keysOn").addEventListener("change", function (e) {
+      state.keysOn = e.target.checked; save("keysOn", state.keysOn ? "1" : "0"); cancelCapture(); renderKeys();
+      setStatus(state.keysOn ? "단축키를 켰어요." : "단축키를 껐어요.", "ok");
     });
     $("#unit").addEventListener("change", function (e) { state.unit = e.target.value; save("unit", state.unit); render(); });
     $("#slidePreset").addEventListener("change", function (e) { state.slidePreset = e.target.value; save("slidePreset", state.slidePreset); render(); });
@@ -416,6 +435,15 @@
 
     // 리모컨을 눌러 포커스가 패널에 있어도 ⌘Z / Ctrl+Z 가 바로 먹도록
     document.addEventListener("keydown", function (e) {
+      if (capture) { onCaptureKey(e); return; }
+      // 패널에 포커스가 있을 때도 설정한 단축키가 먹도록
+      var a0 = document.activeElement;
+      if (state.keysOn && !(a0 && a0.tagName === "INPUT")) {
+        var combo = comboFromEvent(e);
+        if (combo.ok) {
+          for (var id in state.keys) if (state.keys[id] === combo.text) { e.preventDefault(); runKeyAction(id); return; }
+        }
+      }
       var mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       var k = e.key.toLowerCase();
@@ -442,6 +470,9 @@
     Office.actions.associate("ref_selection", wrap(function () { setMode("selection"); }));
     Office.actions.associate("ref_key", wrap(function () { setMode("key"); }));
     Office.actions.associate("ref_slide", wrap(function () { setMode("slide"); }));
+    KEY_ACTIONS.forEach(function (k) {
+      Office.actions.associate(k.id, wrap(function () { return runKeyAction(k.id); }));
+    });
   }
 
   // ---------- 미리보기 모드 (PowerPoint 밖에서 열었을 때) ----------
@@ -476,6 +507,142 @@
     setStatus(word + ": " + entry.label, "ok");
   }
 
+  // ---------- 단축키 ----------
+  var isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
+  var KEY_ACTIONS = [
+    { id: "key_left", edge: "left", name: "왼쪽 맞춤", n: 1 },
+    { id: "key_hcenter", edge: "hcenter", name: "가로 가운데", n: 2 },
+    { id: "key_right", edge: "right", name: "오른쪽 맞춤", n: 3 },
+    { id: "key_vcenter", edge: "vcenter", name: "세로 가운데", n: 4 },
+    { id: "key_top", edge: "top", name: "위쪽 맞춤", n: 5 },
+    { id: "key_bottom", edge: "bottom", name: "아래쪽 맞춤", n: 6 },
+  ];
+  function defaultCombo(k) { return (isMac ? "Command+Option+" : "Ctrl+Alt+") + k.n; }
+  var capture = null; // { id, text }
+
+  function runKeyAction(id) {
+    if (!state.keysOn) return;
+    var k = KEY_ACTIONS.filter(function (x) { return x.id === id; })[0];
+    if (k) return opAlign(k.edge);
+  }
+
+  function initKeys() {
+    var saved = {};
+    try { saved = JSON.parse(load("keys", "{}")) || {}; } catch (e) {}
+    KEY_ACTIONS.forEach(function (k) { state.keys[k.id] = saved[k.id] || defaultCombo(k); });
+    state.keysApi = !!(typeof Office !== "undefined" && Office.actions && Office.actions.replaceShortcuts &&
+      Office.context && Office.context.requirements && Office.context.requirements.isSetSupported("KeyboardShortcuts", "1.1"));
+    if (state.keysApi && Office.actions.getShortcuts) {
+      Office.actions.getShortcuts().then(function (m) {
+        KEY_ACTIONS.forEach(function (k) { if (m && m[k.id]) state.keys[k.id] = m[k.id]; });
+        renderKeys();
+      }).catch(function () {});
+    }
+    renderKeys();
+  }
+
+  // 키 이벤트 → "Command+Option+1" 같은 조합 문자열
+  function comboFromEvent(e) {
+    var parts = [];
+    if (isMac) {
+      if (e.metaKey) parts.push("Command");
+      if (e.altKey) parts.push("Option");
+    } else {
+      if (e.ctrlKey) parts.push("Ctrl");
+      if (e.altKey) parts.push("Alt");
+    }
+    var hasMain = parts.length > 0;
+    if (e.shiftKey) parts.push("Shift");
+    var code = e.code || "", key = null, m;
+    if ((m = /^Key([A-Z])$/.exec(code))) key = m[1];
+    else if ((m = /^Digit(\d)$/.exec(code))) key = m[1];
+    else if (code === "Minus") key = "-";
+    var modOnly = /^(Meta|Alt|Control|Shift|OS)/.test(code);
+    var text = parts.concat(key ? [key] : []).join("+");
+    var err = null;
+    if (modOnly) err = "";
+    else if (!key) err = "영문자·숫자·- 키만 쓸 수 있어요. (F키는 PowerPoint가 막아 둬서 불가)";
+    else if (!hasMain) err = isMac ? "⌘ 또는 ⌥ 키를 같이 눌러 주세요." : "Ctrl 또는 Alt 키를 같이 눌러 주세요.";
+    return { ok: !err && err !== "", text: text, err: err, partial: modOnly };
+  }
+
+  function pretty(combo) {
+    if (!combo) return "없음";
+    if (!isMac) return combo;
+    return combo.replace(/Command\+?/g, "⌘").replace(/Option\+?/g, "⌥").replace(/Shift\+?/g, "⇧")
+      .replace(/Ctrl\+?/g, "⌃").replace(/Alt\+?/g, "⌥");
+  }
+
+  function startCapture(id) { capture = { id: id, text: "", err: "" }; renderKeys(); }
+  function cancelCapture() { capture = null; }
+
+  function onCaptureKey(e) {
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === "Escape") { cancelCapture(); renderKeys(); return; }
+    var c = comboFromEvent(e);
+    if (c.partial) { capture.text = c.text; capture.err = ""; }
+    else if (c.ok) { capture.text = c.text; capture.err = ""; capture.ready = true; }
+    else { capture.text = c.text; capture.err = c.err; capture.ready = false; }
+    renderKeys();
+  }
+
+  function confirmCapture() {
+    if (!capture || !capture.ready) return;
+    var id = capture.id, combo = capture.text;
+    var dup = KEY_ACTIONS.filter(function (k) { return k.id !== id && state.keys[k.id] === combo; })[0];
+    if (dup) { capture.err = "'" + dup.name + "'에 이미 쓰는 조합이에요."; capture.ready = false; renderKeys(); return; }
+    var done = function () {
+      state.keys[id] = combo;
+      save("keys", JSON.stringify(state.keys));
+      cancelCapture(); renderKeys();
+      setStatus("단축키를 " + pretty(combo) + "(으)로 바꿨어요.", "ok");
+    };
+    if (!state.keysApi) { done(); return; }
+    var map = {}; map[id] = combo;
+    Office.actions.replaceShortcuts(map).then(done).catch(function () {
+      if (capture) { capture.err = "PowerPoint가 이 조합을 받아주지 않았어요. 다른 조합을 눌러 주세요."; capture.ready = false; renderKeys(); }
+    });
+  }
+
+  function renderKeys() {
+    var ul = $("#keyList");
+    if (!ul) return;
+    $("#keysOn").checked = state.keysOn;
+    ul.className = "keys" + (state.keysOn ? "" : " off");
+    ul.innerHTML = "";
+    KEY_ACTIONS.forEach(function (k) {
+      var li = document.createElement("li");
+      var icon = document.querySelector('[data-align="' + k.edge + '"] svg');
+      var rec = capture && capture.id === k.id;
+      li.innerHTML = (icon ? icon.outerHTML : "<span></span>") + '<span class="kn"></span><span class="kbd"></span><span class="acts"></span>';
+      li.querySelector(".kn").textContent = k.name;
+      var kbd = li.querySelector(".kbd");
+      kbd.textContent = rec ? (capture.text ? pretty(capture.text) : "키 입력…") : pretty(state.keys[k.id]);
+      if (rec) kbd.className = "kbd rec";
+      var acts = li.querySelector(".acts");
+      if (rec) {
+        var ok = document.createElement("button"); ok.className = "sbtn pri"; ok.textContent = "확인";
+        ok.disabled = !capture.ready; ok.style.opacity = capture.ready ? "1" : ".4";
+        ok.addEventListener("click", confirmCapture);
+        var no = document.createElement("button"); no.className = "sbtn"; no.textContent = "취소"; no.style.marginLeft = "4px";
+        no.addEventListener("click", function () { cancelCapture(); renderKeys(); });
+        acts.appendChild(ok); acts.appendChild(no);
+      } else {
+        var set = document.createElement("button"); set.className = "sbtn"; set.textContent = "단축키 설정";
+        set.disabled = !state.keysOn;
+        set.addEventListener("click", function () { startCapture(k.id); });
+        acts.appendChild(set);
+      }
+      ul.appendChild(li);
+    });
+    var note = "";
+    if (capture && capture.err) note = capture.err;
+    else if (capture) note = "원하는 조합을 누르고 '확인'. Esc로 취소.";
+    else if (!state.keysOn) note = "단축키가 꺼져 있어요.";
+    else if (state.inOffice && !state.keysApi) note = "이 PowerPoint 버전은 단축키 변경을 지원하지 않아 기본 단축키만 동작할 수 있어요.";
+    $("#keysNote").textContent = note;
+  }
+
   // ---------- 시작 ----------
   bindUI();
   render();
@@ -487,6 +654,7 @@
         state.inOffice = true;
         state.api110 = Office.context.requirements.isSetSupported("PowerPointApi", "1.10");
         registerRibbon();
+        initKeys();
         Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, scheduleRefresh);
         refreshSelection();
         // 드래그로 크기·위치를 바꿔도 값이 따라오도록 주기적으로 갱신 (입력 중엔 멈춤)
@@ -499,6 +667,7 @@
   }
 
   function startDemo() {
+    initKeys();
     state.api110 = true;
     state.adjScale = "frac";
     applySelection([

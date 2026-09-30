@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>정렬 리모컨</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-  <script src="align-core.js?v=2"></script>
+  <script src="align-core.js?v=3"></script>
   <style>
     :root {
       --bg: #f6f6f4; --panel: #ffffff; --line: #e3e3de; --text: #1f1f1d; --sub: #7a7a74;
@@ -65,6 +65,20 @@
       background: #fff; border-radius: 50%; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
     .switch input:checked + span { background: var(--accent); }
     .switch input:checked + span::after { transform: translateX(12px); }
+    details.sub { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+    details.sub summary { font-size: 12px; color: var(--text); }
+    .axis { width: 16px; text-align: center; font-size: 11px; font-weight: 600; color: var(--sub); flex: none; }
+    .keys-top { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 6px; font-size: 12px; }
+    ul.keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    ul.keys li { display: grid; grid-template-columns: 20px 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; }
+    ul.keys li svg { width: 18px; height: 18px; }
+    ul.keys.off li { opacity: .45; }
+    .kbd { font-size: 11px; background: var(--btn); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px;
+      min-width: 44px; text-align: center; white-space: nowrap; }
+    .kbd.rec { border-color: var(--accent); color: var(--accent); }
+    .sbtn { font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+      border-radius: 5px; padding: 2px 7px; cursor: pointer; white-space: nowrap; }
+    .sbtn.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
     .note { font-size: 11px; color: var(--sub); margin: 4px 0 0; }
     ul.sel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 180px; overflow: auto; }
     ul.sel li { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
@@ -137,7 +151,17 @@
 
     <section class="card">
       <p class="label"><span>모양</span></p>
-      <div class="fields" style="margin-top:0">
+      <div class="grid2">
+        <label class="field" title="X 위치 (슬라이드 왼쪽에서)">
+          <span class="axis">X</span>
+          <input id="posX" type="number" step="0.01" data-kind="pos" data-axis="x" />
+        </label>
+        <label class="field" title="Y 위치 (슬라이드 위에서)">
+          <span class="axis">Y</span>
+          <input id="posY" type="number" step="0.01" data-kind="pos" data-axis="y" />
+        </label>
+      </div>
+      <div class="fields">
         <label class="field" title="가로 크기">
           <svg viewBox="0 0 16 16"><path class="ico" d="M1.5 8h13M4 5.5 1.5 8 4 10.5M12 5.5 14.5 8 12 10.5"/></svg>
           <input id="sizeW" type="number" step="0.01" min="0" data-kind="size" data-dim="w" />
@@ -162,17 +186,14 @@
           <option value="-45">-45°</option><option value="-90">-90°</option><option value="-135">-135°</option>
         </select>
       </div>
-      <label class="toggle">
-        <span>라운드 조절</span>
-        <span class="switch"><input id="roundOn" type="checkbox" /><span></span></span>
-      </label>
-      <div id="roundBox" hidden>
+      <details class="sub" id="roundDetails">
+        <summary>라운드 조절</summary>
         <label class="field" style="margin-top:8px" title="모서리 반지름">
           <svg viewBox="0 0 16 16"><path class="ico" d="M2.5 13.5V8a5.5 5.5 0 0 1 5.5-5.5h5.5"/></svg>
           <input id="radius" type="number" step="0.01" min="0" data-kind="radius" />
         </label>
         <p class="note" id="roundNote"></p>
-      </div>
+      </details>
     </section>
 
     <section class="card">
@@ -198,7 +219,17 @@
       </div>
       <p class="note" id="slideInfo"></p>
     </details>
+
+    <details id="keysDetails">
+      <summary>단축키</summary>
+      <div class="keys-top">
+        <span>단축키 사용</span>
+        <label class="switch"><input id="keysOn" type="checkbox" /><span></span></label>
+      </div>
+      <ul class="keys" id="keyList"></ul>
+      <p class="note" id="keysNote"></p>
+    </details>
   </div>
-  <script src="taskpane.js?v=2"></script>
+  <script src="taskpane.js?v=3"></script>
 </body>
 </html>
