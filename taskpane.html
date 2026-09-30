@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>정렬 리모컨</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="align-core.js"></script>
+  <style>
+    :root {
+      --bg: #f6f6f4;
+      --panel: #ffffff;
+      --line: #e3e3de;
+      --text: #1f1f1d;
+      --sub: #7a7a74;
+      --accent: #d9481c;
+      --accent-soft: #fbe9e2;
+      --btn: #f1f1ee;
+      --btn-hover: #e6e6e1;
+      --ok: #2f7d4f;
+      --err: #b3261e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1b; --panel: #252524; --line: #353533; --text: #ededea; --sub: #9b9b95;
+        --accent: #ff7a4d; --accent-soft: #3a2a23; --btn: #2f2f2d; --btn-hover: #3a3a37;
+        --ok: #6cc38f; --err: #ff8a80;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text);
+      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", sans-serif; }
+    .wrap { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 220px; }
+    header { display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 14px; margin: 0; letter-spacing: -0.01em; }
+    .count { font-size: 11px; color: var(--sub); background: var(--panel); border: 1px solid var(--line);
+      padding: 2px 8px; border-radius: 999px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+    .label { font-size: 11px; color: var(--sub); margin: 0 0 6px; display: flex; justify-content: space-between; }
+    .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--btn); border-radius: 8px; padding: 2px; gap: 2px; }
+    .seg button { border: 0; background: transparent; color: var(--text); padding: 6px 2px; border-radius: 6px;
+      font: inherit; font-size: 12px; cursor: pointer; }
+    .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .ib { border: 0; background: var(--btn); color: var(--text); border-radius: 8px; height: 40px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 6px; font: inherit; font-size: 12px; }
+    .ib:hover { background: var(--btn-hover); }
+    .ib:active { transform: translateY(1px); }
+    .ib svg { width: 20px; height: 20px; flex: none; }
+    .ib .gl { fill: var(--accent); }
+    .ib .bx { fill: currentColor; opacity: .75; }
+    .row { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+    .row input, .row select { font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--line);
+      border-radius: 6px; padding: 5px 6px; min-width: 0; }
+    .row input { flex: 1; }
+    .hint { font-size: 11px; color: var(--sub); margin-top: 6px; }
+    ul.sel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 180px; overflow: auto; }
+    ul.sel li { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+    ul.sel li:hover { background: var(--btn); }
+    ul.sel li.key { background: var(--accent-soft); }
+    ul.sel .n { width: 18px; height: 18px; border-radius: 50%; background: var(--btn); font-size: 10px;
+      display: flex; align-items: center; justify-content: center; flex: none; }
+    ul.sel li.key .n { background: var(--accent); color: #fff; }
+    ul.sel .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    ul.sel .tag { font-size: 10px; color: var(--accent); font-weight: 600; }
+    .empty { color: var(--sub); font-size: 12px; padding: 4px 2px; }
+    #status { font-size: 11px; min-height: 16px; color: var(--sub); }
+    #status.ok { color: var(--ok); } #status.err { color: var(--err); }
+    details summary { cursor: pointer; font-size: 11px; color: var(--sub); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>정렬 리모컨</h1>
+      <span class="count" id="count">선택 0개</span>
+    </header>
+
+    <section class="card">
+      <p class="label"><span>기준</span><span id="refHint"></span></p>
+      <div class="seg" role="group" aria-label="정렬 기준">
+        <button data-mode="selection">선택 영역</button>
+        <button data-mode="key">기준 오브젝트</button>
+        <button data-mode="slide">슬라이드</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="label"><span>정렬</span></p>
+      <div class="grid3">
+        <button class="ib" data-align="left" title="왼쪽 맞춤"><svg viewBox="0 0 20 20"><rect class="gl" x="2" y="2" width="1.8" height="16"/><rect class="bx" x="5" y="4.5" width="11" height="4" rx="1"/><rect class="bx" x="5" y="11.5" width="7" height="4" rx="1"/></svg></button>
+        <button class="ib" data-align="hcenter" title="가로 가운데 맞춤"><svg viewBox="0 0 20 20"><rect class="bx" x="3" y="4.5" width="14" height="4" rx="1"/><rect class="bx" x="5.5" y="11.5" width="9" height="4" rx="1"/><rect class="gl" x="9.1" y="2" width="1.8" height="16"/></svg></button>
+        <button class="ib" data-align="right" title="오른쪽 맞춤"><svg viewBox="0 0 20 20"><rect class="gl" x="16.2" y="2" width="1.8" height="16"/><rect class="bx" x="4" y="4.5" width="11" height="4" rx="1"/><rect class="bx" x="8" y="11.5" width="7" height="4" rx="1"/></svg></button>
+        <button class="ib" data-align="top" title="위쪽 맞춤"><svg viewBox="0 0 20 20"><rect class="gl" x="2" y="2" width="16" height="1.8"/><rect class="bx" x="4.5" y="5" width="4" height="11" rx="1"/><rect class="bx" x="11.5" y="5" width="4" height="7" rx="1"/></svg></button>
+        <button class="ib" data-align="vcenter" title="세로 가운데 맞춤"><svg viewBox="0 0 20 20"><rect class="bx" x="4.5" y="3" width="4" height="14" rx="1"/><rect class="bx" x="11.5" y="5.5" width="4" height="9" rx="1"/><rect class="gl" x="2" y="9.1" width="16" height="1.8"/></svg></button>
+        <button class="ib" data-align="bottom" title="아래쪽 맞춤"><svg viewBox="0 0 20 20"><rect class="gl" x="2" y="16.2" width="16" height="1.8"/><rect class="bx" x="4.5" y="4" width="4" height="11" rx="1"/><rect class="bx" x="11.5" y="8" width="4" height="7" rx="1"/></svg></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <p class="label"><span>간격 분배</span></p>
+      <div class="grid2">
+        <button class="ib" data-dist="h" title="가로 간격 분배"><svg viewBox="0 0 20 20"><rect class="gl" x="2" y="3" width="1.6" height="14"/><rect class="gl" x="16.4" y="3" width="1.6" height="14"/><rect class="bx" x="5.5" y="5" width="3.5" height="10" rx="1"/><rect class="bx" x="11" y="5" width="3.5" height="10" rx="1"/></svg>가로</button>
+        <button class="ib" data-dist="v" title="세로 간격 분배"><svg viewBox="0 0 20 20"><rect class="gl" x="3" y="2" width="14" height="1.6"/><rect class="gl" x="3" y="16.4" width="14" height="1.6"/><rect class="bx" x="5" y="5.5" width="10" height="3.5" rx="1"/><rect class="bx" x="5" y="11" width="10" height="3.5" rx="1"/></svg>세로</button>
+      </div>
+      <div class="row">
+        <input id="gap" type="number" step="0.1" min="0" placeholder="간격 (비우면 균등)" />
+        <select id="unit">
+          <option value="cm">cm</option>
+          <option value="mm">mm</option>
+          <option value="pt">pt</option>
+          <option value="px">px</option>
+        </select>
+      </div>
+      <p class="hint">간격을 비우면 양 끝은 그대로 두고 사이를 똑같이 나눠요(3개 이상). 값을 넣으면 그 간격으로 붙여요(2개 이상).</p>
+    </section>
+
+    <section class="card">
+      <p class="label"><span>선택 순서</span><span>눌러서 기준 변경</span></p>
+      <ul class="sel" id="list"></ul>
+    </section>
+
+    <div id="status" role="status"></div>
+
+    <details>
+      <summary>슬라이드 크기</summary>
+      <div class="row">
+        <select id="slidePreset" style="flex:1">
+          <option value="auto">자동 감지</option>
+          <option value="960x540">16:9 (33.867 × 19.05cm)</option>
+          <option value="720x540">4:3 (25.4 × 19.05cm)</option>
+          <option value="custom">직접 입력</option>
+        </select>
+      </div>
+      <div class="row" id="customSize" hidden>
+        <input id="sw" type="number" step="0.01" placeholder="가로 cm" />
+        <input id="sh" type="number" step="0.01" placeholder="세로 cm" />
+      </div>
+      <p class="hint" id="slideInfo"></p>
+    </details>
+  </div>
+  <script src="taskpane.js"></script>
+</body>
+</html>
